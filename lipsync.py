@@ -4,7 +4,7 @@ from config import OUTPUTS_DIR
 from utils import logger
 import traceback
 
-def run_lipsync(video_path: str, dubbed_audio_path: str) -> str:
+def run_lipsync(video_path: str, dubbed_audio_path: str, timing_map_path: str = None) -> str:
     """
     Merges the original video with the new dubbed Hindi audio.
     If dubbed audio is longer than video, speeds up video slightly and slows audio
@@ -40,27 +40,20 @@ def run_lipsync(video_path: str, dubbed_audio_path: str) -> str:
         if video_duration and audio_duration:
             logger.info(f"Video: {video_duration:.2f}s, Audio: {audio_duration:.2f}s")
         
-        # Always apply speed adjustment to fit audio - no cutting allowed
-        if video_duration and audio_duration and audio_duration > video_duration:
-            # Speed up video and slow down audio to fit exactly
-            scale_factor = audio_duration / video_duration
-            
-            # Apply speed adjustment (no cap - full dialogue must be preserved)
-            video_speed = scale_factor
-            audio_speed = 1.0
-            
-            logger.info(f"Adjusting: video {video_speed:.3f}x faster, audio at normal speed")
-            
-            # Apply video speed up
-            temp_video = video_path.replace('.mp4', '_speed.mp4')
-            subprocess.run(
-                f'ffmpeg -y -i "{video_path}" -filter:v setpts={1/video_speed}*PTS -c:v libx264 -preset fast -crf 23 "{temp_video}"',
-                shell=True, capture_output=True, check=True
-            )
-            
-            # Audio stays at original speed (we speed up video to match audio duration)
-            video_path = temp_video
+        # Audio is sped up by 1.25x, slow video to match
+        video_speed = 0.8  # Slow video to match 25% speedup
         
+        logger.info(f"Adjusting video speed: {video_speed}x")
+        
+        # Apply video speed adjustment
+        temp_video = video_path.replace('.mp4', '_slow.mp4')
+        subprocess.run(
+            f'ffmpeg -y -i "{video_path}" -filter:v setpts={1/video_speed}*PTS -c:v libx264 -preset fast -crf 23 "{temp_video}"',
+            shell=True, capture_output=True, check=True
+        )
+        
+        video_path = temp_video
+
         # Check if video is still shorter than audio - extend video if needed
         try:
             final_video_dur = subprocess.run(

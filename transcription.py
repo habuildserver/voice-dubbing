@@ -17,7 +17,6 @@ def transcribe_audio(audio_path: str) -> list:
         model = whisper.load_model(WHISPER_MODEL)
         
         logger.info(f"Transcribing audio: {audio_path}")
-        # Transcribe with word-level timestamps to be precise, though segment-level is usually enough
         result = model.transcribe(audio_path, language="en")
         
         segments = result.get('segments', [])

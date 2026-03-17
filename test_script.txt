@@ -1,0 +1,4 @@
+[0:v]trim=start=0:end=4,setpts=1.0*(PTS-STARTPTS)[v0];
+[0:v]trim=start=4:end=6,setpts=3.0*(PTS-STARTPTS)[v1];
+[0:v]trim=start=6:end=10,setpts=0.5*(PTS-STARTPTS)[v2];
+[v0][v1][v2]concat=n=3:v=1:a=0[outv]
