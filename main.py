@@ -9,7 +9,7 @@ from audio_processing import extract_audio
 from transcription import transcribe_audio
 from translation import translate_segments
 from tts_generation import generate_dubbed_audio
-from lipsync import run_lipsync
+from video_merger import run_lipsync
 import ffmpeg
 
 def get_video_duration(video_path: str) -> float:
