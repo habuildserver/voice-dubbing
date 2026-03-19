@@ -9,7 +9,7 @@ from audio_processing import extract_audio
 from transcription import transcribe_audio
 from translation import translate_segments
 from tts_generation import generate_dubbed_audio
-from lipsync import run_lipsync
+from video_merger import run_lipsync
 import ffmpeg
 
 def get_video_duration(video_path: str) -> float:
@@ -86,14 +86,14 @@ def run_pipeline(video_source: str, status_updater=None):
             pct = 50 + fraction * 40  # maps 0-1 → 50-90%
             update(round(pct, 1), "Generating Hindi Audio", msg)
 
-        dubbed_audio_path = generate_dubbed_audio(
+        dubbed_audio_path, timing_map_path = generate_dubbed_audio(
             hindi_segments, audio_path, video_duration, progress_callback=tts_progress
         )
         update(90, "Generating Hindi Audio", "TTS generation complete.")
 
         # Stage 6 – Final assembly (90 → 100%)
         update(92, "Assembling Video", "Merging Hindi audio with original video...")
-        final_video_path = run_lipsync(video_path, dubbed_audio_path)
+        final_video_path = run_lipsync(video_path, dubbed_audio_path, timing_map_path)
         update(100, "Done", "Pipeline finished successfully!")
 
         logger.info("========== Pipeline Successfully Finished ==========")
