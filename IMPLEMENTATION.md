@@ -10,142 +10,163 @@ This pipeline takes a video (local file or YouTube URL), transcribes the audio, 
 
 ```
 Voice dubbing/
-├── app.py                    # Flask web server (run this for web UI)
+├── app.py                    # Flask web server (UI at http://127.0.0.1:5050)
 ├── main.py                   # Main pipeline orchestrator
 ├── config.py                 # Configuration (paths, languages, models)
 ├── utils.py                  # Logger and directory setup
 │
-├── video_merger.py          # Merges dubbed audio with video
-├── tts_generation.py        # Generates Hindi speech from translated text
-├── translation.py           # Translates English text to Hindi
-├── transcription.py         # Transcribes audio to text using Whisper
-├── audio_processing.py      # Extracts audio from video
-├── downloader.py            # Downloads YouTube videos
+├── Pipeline Modules:
+│   ├── downloader.py         # Downloads YouTube videos (yt-dlp)
+│   ├── audio_processing.py   # Extracts audio from video (ffmpeg)
+│   ├── transcription.py      # Transcribes audio to text (Whisper)
+│   ├── translation.py        # Translates English → Hindi (Google Translate)
+│   ├── tts_generation.py     # Generates Hindi speech (Edge TTS)
+│   ├── video_merger.py       # Merges dubbed audio with video
+│   └── sync_lipsync.py       # Lip sync via Sync.so API
 │
-├── videos/                  # Source videos (input)
-├── audio/                   # Extracted & generated audio (intermediate)
-├── outputs/                 # Final dubbed videos (output)
-├── static/                  # CSS for web UI
-└── templates/               # HTML for web UI
+├── Directories:
+│   ├── videos/               # Source videos (input)
+│   ├── audio/                # Extracted & generated audio (intermediate)
+│   ├── outputs/              # Final dubbed videos + hindi.mp3
+│   ├── static/               # CSS for web UI
+│   └── templates/            # HTML for web UI
+│
+└── Other:
+    ├── rhubarb/              # Rhubarb lip sync tool (phoneme-based)
+    ├── wav2lip_pipeline/     # Wav2Lip implementation (not used)
+    └── requirements.txt      # Python dependencies
 ```
+
+---
+
+## Index by Feature
+
+| Feature | File | Key Function |
+|---------|------|--------------|
+| Web UI | `app.py`, `templates/index.html` | `/api/dub`, `/api/status` |
+| Pipeline | `main.py` | `run_pipeline()` |
+| YouTube Download | `downloader.py` | `download_youtube_video()` |
+| Audio Extraction | `audio_processing.py` | `extract_audio()` |
+| Transcription | `transcription.py` | `transcribe_audio()` |
+| Translation | `translation.py` | `translate_segments()` |
+| TTS Generation | `tts_generation.py` | `generate_dubbed_audio()` |
+| Video Merge | `video_merger.py` | `run_lipsync()` |
+| Lip Sync (Sync.so) | `sync_lipsync.py` | `run_lipsync()` |
+| Configuration | `config.py` | Settings and paths |
 
 ---
 
 ## Pipeline Flow
 
 ```
-┌─────────────────┐
-│  Video Input    │ ──► YouTube URL or Local File
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Downloader      │ ──► (Skip if local file)
-│ (YouTube)       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Audio Extractor │ ──► Extracts audio as 16kHz mono WAV
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Transcription   │ ──► Whisper model: audio → text segments
-│ (Whisper)       │     Each segment: {text, start, end}
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Translation     │ ──► Google Translate: English → Hindi
-│ (deep-translator│     Output: Hindi text segments
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ TTS Generation  │ ──► Edge TTS: Hindi text → speech
-│                 │     - Detect speech regions in original audio
-│                 │     - Stretch/compress to fit original time gaps
-│                 │     - Preserve pauses (silence in original = silence in output)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Video Merger     │ ──► Merge dubbed audio with video
-│                 │     - Extend video if audio is longer
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Final Output    │ ──► Dubbed video in outputs/
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        VIDEO INPUT                            │
+│                    (YouTube URL or Local File)               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     1. DOWNLOADER                             │
+│                 (yt-dlp if YouTube URL)                      │
+│                   Output: .mp4 file                           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  2. AUDIO EXTRACTION                         │
+│              (ffmpeg - extract 16kHz mono WAV)              │
+│                   Output: audio/*.wav                         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    3. TRANSCRIPTION                          │
+│                   (OpenAI Whisper model)                     │
+│         Input: WAV → Output: [{text, start, end}, ...]       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     4. TRANSLATION                           │
+│              (Google Translate via deep-translator)           │
+│              Input: English segments → Hindi segments         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    5. TTS GENERATION                         │
+│                      (Microsoft Edge TTS)                    │
+│  - Detect speech regions in original audio                    │
+│  - Generate Hindi speech for each segment                     │
+│  - Time-stretch to fit original speech gaps                   │
+│  - Preserve pauses (silence regions)                          │
+│  - Output: dubbed WAV + timing JSON                          │
+│  - Also saves: outputs/hindi.mp3                              │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    6. VIDEO MERGER                            │
+│                      (ffmpeg)                                 │
+│  - Merge dubbed audio with original video                     │
+│  - Extend video if audio is longer                            │
+│  - Output: outputs/*_final.mp4                               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   7. OPTIONAL LIP SYNC                       │
+│                  (Sync.so API - paid)                        │
+│  - Requires clear face in video                              │
+│  - Max 20 seconds on free tier                               │
+│  - Uses file.io for temporary hosting                         │
+│  - Output: Lip-synced video                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Key Calculations
-
-### 1. Speech Region Detection (`tts_generation.py`)
+## Key Settings (main.py)
 
 ```python
-# Load audio and compute energy spectrum
-y, sr = librosa.load(audio_path, sr=16000)
-energy = np.abs(librosa.stft(y))
-energy_db = librosa.amplitude_to_db(energy, ref=np.max)
-
-# Threshold: frames above -50dB are speech
-is_speech = energy_db.mean(axis=0) > -50
+# Current fixed settings
+TTS_SPEED = 0.95    # Audio slightly slowed (0.95x)
+VIDEO_SPEED = 1.0   # Video at normal speed
 ```
 
-**Output:** List of regions `[{start, end, speech}, ...]`
+---
 
-### 2. Time Stretching for Dubbed Audio
+## How TTS Works
 
-Each translated segment is stretched/compressed to fit exactly in its original time gap:
-
+### Speech Region Detection
 ```python
-target_duration = original_end - original_start  # e.g., 3.0 seconds
-target_samples = target_duration * sample_rate   # 3.0 * 24000 = 72000
+# Compute energy spectrum of original audio
+y, sr = librosa.load(audio_path, sr=16000)
+energy = np.abs(librosa.stft(y))
+energy_db = librosa.amplitude_to_db(energy)
+
+# Frames above -60dB are speech
+is_speech = energy_db.mean(axis=0) > -60
+```
+
+### Time Stretching
+```python
+target_duration = (original_end - original_start) / TTS_SPEED
+target_samples = target_duration * sample_rate
 
 # Calculate stretch rate
-rate = len(wav_data) / target_samples            # if TTS produces 4s audio for 3s gap
-
-# Stretch to fit
+rate = len(wav_data) / target_samples
 wav_data = librosa.effects.time_stretch(wav_data, rate=rate)
 ```
 
-**Result:** If original speech was 3 seconds, dubbed audio is also 3 seconds - preserving timing.
-
-### 3. Preserving Pauses
-
-The final audio array is initialized with zeros (silence):
-
+### Preserving Pauses
 ```python
+# Initialize with silence (zeros)
 final_audio = np.zeros(total_samples, dtype=np.float32)
+
+# Place dubbed audio only at speech timestamps
+# Silence regions remain as zeros
 ```
-
-Audio is placed only at timestamps where original had speech. Silence regions remain as zeros.
-
-### 4. Video Extension (`video_merger.py`)
-
-If dubbed audio is longer than video:
-- Extend video by looping last frame
-- Use FFmpeg: `loop=999:1:0` filter
-
----
-
-## Important Locations
-
-| Purpose | File | Key Function |
-|---------|------|--------------|
-| Web UI | `app.py` | Flask routes `/`, `/api/dub`, `/api/status` |
-| Pipeline | `main.py` | `run_pipeline()` - orchestrates all stages |
-| Audio Extraction | `audio_processing.py` | `extract_audio()` |
-| Transcription | `transcription.py` | `transcribe_audio()` |
-| Translation | `translation.py` | `translate_segments()` |
-| TTS Generation | `tts_generation.py` | `generate_dubbed_audio()` |
-| Video Merge | `video_merger.py` | `run_lipsync()` |
-| Configuration | `config.py` | `WHISPER_MODEL`, `TARGET_LANGUAGE`, directories |
 
 ---
 
@@ -155,7 +176,7 @@ If dubbed audio is longer than video:
 ```bash
 python app.py
 ```
-Then open http://127.0.0.1:5050
+Open http://127.0.0.1:5050
 
 ### Command Line
 ```bash
@@ -164,11 +185,89 @@ python main.py <video_path_or_youtube_url>
 
 ---
 
+## Output Files
+
+| File | Description |
+|------|-------------|
+| `outputs/*_final.mp4` | Final dubbed video |
+| `outputs/hindi.mp3` | Hindi dubbed audio only |
+| `audio/*_dubbed.wav` | Intermediate dubbed WAV |
+| `audio/*_timing.json` | Segment timing data |
+
+---
+
 ## Dependencies
 
-- **Whisper** - Transcription
-- **deep-translator** - Translation  
-- **edge-tts** - Hindi speech synthesis
-- **librosa** - Audio processing & time stretching
-- **ffmpeg** - Video/audio manipulation
-- **Flask** - Web server
+| Package | Purpose |
+|---------|---------|
+| `whisper` | Audio transcription |
+| `deep-translator` | English → Hindi translation |
+| `edge-tts` | Hindi speech synthesis |
+| `librosa` | Audio processing & time stretching |
+| `soundfile` | Audio file I/O |
+| `yt-dlp` | YouTube video downloading |
+| `ffmpeg` | Video/audio manipulation |
+| `flask` | Web server |
+
+---
+
+## Future Scope
+
+### 1. Multi-language Support
+- Add support for languages beyond Hindi
+- Language selection in UI
+- Configurable target language in `config.py`
+
+### 2. Voice Cloning
+- Use ElevenLabs API for custom voices
+- Clone original speaker's voice in dubbed version
+- Currently `config.py` has ElevenLabs API key slot
+
+### 3. Improved Lip Sync
+- **Sync.so API** integration is ready but requires:
+  - Paid subscription for longer videos
+  - Clear, front-facing face in video
+- **Wav2Lip** implementation exists in `wav2lip_pipeline/` but needs GPU
+- Future: Local GPU-based lip sync (Wav2Lip, DiffTalk)
+
+### 4. Video Speed Control UI
+- Add slider in UI for speed adjustment
+- Currently hardcoded in `main.py`
+
+### 5. Batch Processing
+- Process multiple videos in queue
+- Background job management
+
+### 6. Subtitle Generation
+- Add SRT/VTT subtitles in Hindi
+- Burn subtitles into video
+
+### 7. Audio-Only Mode
+- Generate dubbed audio without video
+- Already partially works (hindi.mp3)
+
+### 8. Quality Improvements
+- Better silence detection
+- Improved translation quality (LLM-based)
+- Prosody control for natural speech
+
+---
+
+## Troubleshooting
+
+### Lip Sync Fails
+- Sync.so requires clear face visibility
+- Video must be ≤20 seconds (free tier)
+- Check `sync_lipsync.py` for API key
+
+### Audio Too Long/Short
+- Adjust `TTS_SPEED` in `main.py`
+- Check silence threshold in `tts_generation.py`
+
+### YouTube Download Fails
+- Update yt-dlp: `pip install --upgrade yt-dlp`
+- Check video is not age-restricted or private
+
+### Poor Translation Quality
+- Currently using Google Translate
+- Could replace with OpenAI/Gemini API for better results
