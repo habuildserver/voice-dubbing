@@ -20,7 +20,6 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden;
     position: relative;
 }
 
@@ -186,6 +185,13 @@ video {
     box-shadow: 0 10px 25px -5px rgba(0,0,0,.5);
 }
 
+.download-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
 .secondary-btn {
     display: inline-block;
     background: rgba(255,255,255,.1);
@@ -280,4 +286,35 @@ video {
 }
 .danger-btn:hover:not(:disabled) {
     background: #dc2626;
+}
+
+/* Scroll controls */
+.scroll-controls {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+}
+
+.scroll-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.scroll-btn:hover {
+    background: var(--primary);
+    transform: scale(1.1);
 }

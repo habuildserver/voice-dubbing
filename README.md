@@ -1,285 +1,273 @@
-# 🎙 AI Video Dubbing Pipeline
+# AI Video Dubbing Pipeline
 
-A fully automated, locally-run Python pipeline + Web UI that takes a YouTube video URL or local video file and produces a **Hindi-dubbed version** — with AI voice synthesis, timing preservation, and optional lip sync.
-
----
-
-## ✨ Features
-
-| Stage | Tool Used | What it does |
-|---|---|---|
-| **Download** | `yt-dlp` | Downloads video from YouTube |
-| **Audio Extraction** | `ffmpeg` | Extracts WAV audio track |
-| **Transcription** | `OpenAI Whisper` | Converts English speech → timestamped text |
-| **Translation** | `Google Translate` | Translates English → Hindi |
-| **TTS** | `Microsoft Edge TTS` | Synthesizes Hindi speech |
-| **Video Assembly** | `ffmpeg` | Merges dubbed audio with original video |
-| **Lip Sync** | `Sync.so API` (optional) | Syncs mouth movements to audio |
+Automated pipeline that translates and dubs videos from English to Hindi using AI.
 
 ---
 
-## 🖥️ Web Interface (Recommended)
+## Project Structure
 
-```bash
-source venv/bin/activate
-python app.py
+```
+voice-dubbing/
+├── main.py                     # CLI entry point (full pipeline)
+├── requirements.txt            # Dependencies
+│
+├── src/                        # Source code
+│   ├── core/                   # Core utilities
+│   │   ├── config.py           # Configuration & paths
+│   │   └── logger.py           # Logging setup
+│   │
+│   ├── pipeline/               # Sequential pipeline stages
+│   │   ├── stage_01_download.py
+│   │   ├── stage_02_extract_audio.py
+│   │   ├── stage_03_transcribe.py
+│   │   ├── stage_04_translate.py
+│   │   ├── stage_05_tts.py
+│   │   └── stage_06_merge.py
+│   │
+│   └── api/                    # Web server
+│       └── server.py
+│
+├── tools/                      # Standalone tools (use independently)
+│   ├── download.py             # Download YouTube videos
+│   ├── transcribe.py           # Transcribe audio to text
+│   ├── translate.py            # Translate text between languages
+│   ├── tts.py                  # Text-to-Speech synthesis
+│   └── merge.py                # Merge video with audio
+│
+├── web/                        # Web UI
+│   ├── static/style.css
+│   └── templates/index.html
+│
+├── data/                       # Data directories
+│   ├── inputs/                 # Source videos
+│   ├── intermediate/           # Extracted/generated audio
+│   └── outputs/                # Final dubbed videos
+│
+└── temp/                      # Temporary files
 ```
 
-Then open **[http://localhost:5050](http://localhost:5050)**, paste a YouTube URL or upload a video and hit **Dub Video**.
-
-Features:
-- 🔵 Animated progress bar with stage labels
-- 📊 Percentage complete + ETA
-- 🎬 In-browser video playback
-- ⬇️ Download Video + Download Audio buttons
-- ▲▼ Scroll buttons
-
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. System Prerequisites
-
-- **Python 3.9–3.11**
-- **FFmpeg**:
-  ```bash
-  # macOS
-  brew install ffmpeg
-  # Ubuntu/Debian
-  sudo apt install ffmpeg
-  ```
-
-### 2. Installation
+### 1. Installation
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Run
+### 2. Run Full Pipeline
 
 ```bash
-python app.py
+# Using YouTube URL
+python main.py "https://youtube.com/watch?v=..."
+
+# Using local video
+python main.py ./video.mp4
+
+# Custom languages
+python main.py "URL" -s en -t es
+```
+
+### 3. Run Web UI
+
+```bash
+python -m src.api.server
+# Open http://localhost:5050
 ```
 
 ---
 
-## 📁 Project Structure
+## Standalone Tools
 
+Each tool can be used independently. No pipeline required.
+
+### Download Videos
+
+```bash
+# Download from YouTube
+python tools/download.py "https://youtube.com/watch?v=..."
+
+# Save to specific directory
+python tools/download.py "URL" -o ./my_videos/
+
+# Get video info only
+python tools/download.py "URL" --info
 ```
-Voice dubbing/
-├── app.py                    # Flask web server (UI at http://127.0.0.1:5050)
-├── main.py                   # Main pipeline orchestrator
-├── config.py                 # Configuration (paths, languages, models)
-├── utils.py                 # Logger and directory setup
-│
-├── Pipeline Modules:
-│   ├── downloader.py         # Downloads YouTube videos (yt-dlp)
-│   ├── audio_processing.py   # Extracts audio from video (ffmpeg)
-│   ├── transcription.py     # Transcribes audio to text (Whisper)
-│   ├── translation.py        # Translates English → Hindi
-│   ├── tts_generation.py    # Generates Hindi speech (Edge TTS)
-│   ├── video_merger.py      # Merges dubbed audio with video
-│   └── sync_lipsync.py      # Lip sync via Sync.so API
-│
-├── Directories:
-│   ├── videos/               # Source videos (input)
-│   ├── audio/                # Extracted & generated audio (intermediate)
-│   ├── outputs/              # Final dubbed videos + hindi.mp3
-│   ├── static/               # CSS for web UI
-│   └── templates/            # HTML for web UI
-│
-└── Other:
-    ├── rhubarb/              # Rhubarb lip sync tool
-    ├── wav2lip_pipeline/    # Wav2Lip (GPU required)
-    └── requirements.txt      # Python dependencies
+
+### Transcribe Audio
+
+```bash
+# Basic transcription
+python tools/transcribe.py audio.wav -o transcript.txt
+
+# Higher quality model, JSON output
+python tools/transcribe.py audio.wav -m base -j -o transcript.json
+
+# List available models
+python tools/transcribe.py --list-models
+```
+
+### Translate Text
+
+```bash
+# Translate text directly
+python tools/translate.py "Hello world" -t hi
+
+# Translate file content
+python tools/translate.py input.txt -t hi -o output.txt
+
+# Spanish to French
+python tools/translate.py "Hola mundo" -s es -t fr
+```
+
+### Text-to-Speech
+
+```bash
+# Generate Hindi speech
+python tools/tts.py "नमस्ते" -l hi -o hello.mp3
+
+# Use specific text file
+python tools/tts.py script.txt -l hi -o audio.mp3
+
+# List available voices
+python tools/tts.py --list-voices
+```
+
+### Merge Video + Audio
+
+```bash
+# Basic merge
+python tools/merge.py video.mp4 audio.wav -o output.mp4
+
+# Adjust video speed to match audio
+python tools/merge.py video.mp4 audio.wav -s 0.95 -o output.mp4
 ```
 
 ---
 
-## 🔧 Feature Index
+## Pipeline Flow
 
-| Feature | File | Key Function |
-|---------|------|--------------|
-| Web UI | `app.py`, `templates/index.html` | `/api/dub`, `/api/status` |
-| Pipeline | `main.py` | `run_pipeline()` |
-| YouTube Download | `downloader.py` | `download_youtube_video()` |
-| Audio Extraction | `audio_processing.py` | `extract_audio()` |
-| Transcription | `transcription.py` | `transcribe_audio()` |
-| Translation | `translation.py` | `translate_segments()` |
-| TTS Generation | `tts_generation.py` | `generate_dubbed_audio()` |
-| Video Merge | `video_merger.py` | `run_lipsync()` |
-| Lip Sync (Sync.so) | `sync_lipsync.py` | `run_lipsync()` |
-| Configuration | `config.py` | Settings and paths |
+```
+Video Input
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 1: Download (yt-dlp)              │
+│ Input: YouTube URL → Output: .mp4       │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 2: Extract Audio (ffmpeg)          │
+│ Input: .mp4 → Output: 16kHz WAV        │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 3: Transcribe (Whisper)           │
+│ Input: WAV → Output: transcript.json   │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 4: Translate (Google)             │
+│ Input: transcript.json → Output:        │
+│        translated.json                  │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 5: TTS (Edge TTS)                │
+│ Input: translated.json → Output:        │
+│        dubbed.wav, timing.json          │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│ Stage 6: Merge (ffmpeg)                 │
+│ Input: original.mp4 + dubbed.wav →      │
+│        Output: final.mp4               │
+└─────────────────────────────────────────┘
+```
 
 ---
 
-## ⚙️ Current Settings
+## Using Individual Pipeline Stages
+
+Each stage can be run independently:
+
+```bash
+# Stage 1: Download
+python src/pipeline/stage_01_download.py "URL" -o ./data/inputs/
+
+# Stage 2: Extract audio
+python src/pipeline/stage_02_extract_audio.py ./video.mp4 -o ./data/intermediate/
+
+# Stage 3: Transcribe
+python src/pipeline/stage_03_transcribe.py ./audio.wav -m tiny -o ./data/intermediate/
+
+# Stage 4: Translate
+python src/pipeline/stage_04_translate.py ./transcript.json -t hi
+
+# Stage 5: TTS
+python src/pipeline/stage_05_tts.py ./translated.json -a ./audio.wav -l hi
+
+# Stage 6: Merge
+python src/pipeline/stage_06_merge.py ./video.mp4 ./dubbed.wav -o ./data/outputs/
+```
+
+---
+
+## Data Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `data/inputs/` | Source videos (YouTube downloads or uploaded files) |
+| `data/intermediate/` | Extracted audio, transcripts, translations, dubbed audio |
+| `data/outputs/` | Final dubbed videos |
+| `temp/` | Temporary processing files |
+
+---
+
+## Configuration
+
+Edit `src/core/config.py`:
 
 ```python
-# main.py - Fixed settings
-TTS_SPEED = 0.95    # Audio slightly slowed (0.95x)
-VIDEO_SPEED = 1.0    # Video at normal speed
+WHISPER_MODEL = "tiny"      # tiny, base, small, medium, large
+TARGET_LANGUAGE = "hi"       # Target language code
+SOURCE_LANGUAGE = "en"       # Source language code
 ```
 
-To change settings, edit these values in `main.py`.
+Edit `main.py` for pipeline settings:
 
----
-
-## 🔄 Pipeline Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        VIDEO INPUT                            │
-│                    (YouTube URL or Local File)                │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     1. DOWNLOADER                             │
-│                 (yt-dlp if YouTube URL)                      │
-│                   Output: .mp4 file                          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  2. AUDIO EXTRACTION                         │
-│              (ffmpeg - extract 16kHz mono WAV)              │
-│                   Output: audio/*.wav                        │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    3. TRANSCRIPTION                          │
-│                   (OpenAI Whisper model)                     │
-│         Input: WAV → Output: [{text, start, end}, ...]      │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     4. TRANSLATION                           │
-│              (Google Translate via deep-translator)         │
-│              Input: English segments → Hindi segments        │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    5. TTS GENERATION                         │
-│                      (Microsoft Edge TTS)                    │
-│  - Detect speech regions in original audio                    │
-│  - Generate Hindi speech for each segment                    │
-│  - Time-stretch to fit original speech gaps                  │
-│  - Preserve pauses (silence regions)                         │
-│  - Output: dubbed WAV + timing JSON                          │
-│  - Also saves: outputs/hindi.mp3                             │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    6. VIDEO MERGER                           │
-│                      (ffmpeg)                                │
-│  - Merge dubbed audio with original video                     │
-│  - Extend video if audio is longer                           │
-│  - Output: outputs/*_final.mp4                               │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🔊 TTS Technical Details
-
-### Speech Region Detection
 ```python
-# Compute energy spectrum of original audio
-y, sr = librosa.load(audio_path, sr=16000)
-energy = np.abs(librosa.stft(y))
-energy_db = librosa.amplitude_to_db(energy)
-
-# Frames above -60dB are speech
-is_speech = energy_db.mean(axis=0) > -60
-```
-
-### Time Stretching
-```python
-target_duration = (original_end - original_start) / TTS_SPEED
-target_samples = target_duration * sample_rate
-
-# Calculate stretch rate
-rate = len(wav_data) / target_samples
-wav_data = librosa.effects.time_stretch(wav_data, rate=rate)
-```
-
-### Preserving Pauses
-```python
-# Initialize with silence (zeros)
-final_audio = np.zeros(total_samples, dtype=np.float32)
-
-# Place dubbed audio only at speech timestamps
-# Silence regions remain as zeros
+TTS_SPEED = 0.95             # TTS audio speed (higher = faster)
+VIDEO_SPEED = 1.0             # Video playback speed
 ```
 
 ---
 
-## 📤 Output Files
+## Supported Languages
 
-| File | Description |
-|------|-------------|
-| `outputs/*_final.mp4` | Final dubbed video |
-| `outputs/hindi.mp3` | Hindi dubbed audio only |
-| `audio/*_dubbed.wav` | Intermediate dubbed WAV |
-| `audio/*_timing.json` | Segment timing data |
-
----
-
-## 🔧 Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| `ffmpeg: command not found` | Install system ffmpeg (not pip) |
-| Lip sync fails | Sync.so requires clear face visibility + ≤20s video (free tier) |
-| Audio too long/short | Adjust `TTS_SPEED` in `main.py` |
-| YouTube download fails | Update yt-dlp or check video is not age-restricted |
-| Port 5000 forbidden | Use `localhost:5050` instead |
+| Code | Language | Code | Language |
+|------|----------|------|----------|
+| en | English | ja | Japanese |
+| hi | Hindi | ko | Korean |
+| es | Spanish | zh | Chinese |
+| fr | French | ru | Russian |
+| de | German | ar | Arabic |
+| it | Italian | pt | Portuguese |
 
 ---
 
-## 🚀 Future Scope
+## Dependencies
 
-### 1. Multi-language Support
-- Add support for languages beyond Hindi
-- Language selection in UI
-- Configurable target language
-
-### 2. Voice Cloning
-- Use ElevenLabs API for custom voices
-- Clone original speaker's voice in dubbed version
-- `config.py` has ElevenLabs API key slot ready
-
-### 3. Improved Lip Sync
-- **Sync.so API** ready but requires paid subscription for longer videos
-- **Wav2Lip** in `wav2lip_pipeline/` needs GPU
-- Future: Local GPU-based lip sync (Wav2Lip, DiffTalk)
-
-### 4. Video Speed Control UI
-- Add slider in UI for speed adjustment
-- Currently hardcoded in `main.py`
-
-### 5. Batch Processing
-- Process multiple videos in queue
-- Background job management
-
-### 6. Subtitle Generation
-- Add SRT/VTT subtitles in Hindi
-- Burn subtitles into video
-
-### 7. Quality Improvements
-- Better silence detection
-- LLM-based translation for better quality
-- Prosody control for natural speech
-
----
-
-## 📜 License
-
-This project uses open-source tools. Please ensure you comply with individual licenses of `Edge TTS`, `OpenAI Whisper` (MIT), and `yt-dlp` (Unlicense).
+- **yt-dlp** - YouTube video downloading
+- **ffmpeg-python** - Audio/video processing
+- **openai-whisper** - Speech transcription
+- **deep-translator** - Text translation
+- **edge-tts** - Text-to-speech synthesis
+- **librosa** - Audio analysis
+- **flask** - Web server

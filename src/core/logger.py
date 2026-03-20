@@ -1,6 +1,6 @@
 import logging
 import os
-from config import setup_directories
+from .config import setup_directories
 
 def setup_logger(name="DubbingPipeline", log_file="pipeline.log"):
     """Set up and return a logger with standard formatting."""
