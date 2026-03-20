@@ -2,31 +2,45 @@ import argparse
 import sys
 import os
 import time
+import json
 
-from utils import logger, initialize_project_environment
-from downloader import download_youtube_video
-from audio_processing import extract_audio
-from transcription import transcribe_audio
-from translation import translate_segments
-from tts_generation import generate_dubbed_audio
-from video_merger import run_lipsync
-import ffmpeg
+from src.pipeline.stage_01_download import download_youtube_video
+from src.pipeline.stage_02_extract_audio import extract_audio
+from src.pipeline.stage_03_transcribe import transcribe_audio
+from src.pipeline.stage_04_translate import translate_file
+from src.pipeline.stage_05_tts import generate_tts
+from src.pipeline.stage_06_merge import merge_video_audio
+
+TTS_SPEED = 0.95
+VIDEO_SPEED = 1.0
 
 def get_video_duration(video_path: str) -> float:
-    """Helper purely to get the video duration in seconds using ffprobe."""
+    """Get video duration in seconds."""
     try:
+        import ffmpeg
         probe = ffmpeg.probe(video_path)
         return float(probe['format']['duration'])
     except Exception as e:
+        from src.core.logger import logger
         logger.warning(f"Failed to extract video duration. Defaulting to 1000s. {e}")
         return 1000.0
 
-def run_pipeline(video_source: str, status_updater=None):
+def run_pipeline(video_source: str, status_updater=None,
+                 source_lang: str = "en", target_lang: str = "hi",
+                 whisper_model: str = "tiny"):
     """
-    Main dubbing pipeline.
-    video_source: YouTube URL or local video file path
-    status_updater(progress: float 0-100, stage: str, message: str, eta_seconds: float | None)
+    Run the complete dubbing pipeline.
+    
+    Args:
+        video_source: YouTube URL or local video file path
+        status_updater: Callback for progress updates
+        source_lang: Source language code
+        target_lang: Target language code
+        whisper_model: Whisper model size
     """
+    from src.core.logger import logger, initialize_project_environment
+    initialize_project_environment()
+    
     pipeline_start = time.time()
 
     def update(progress, stage, message):
@@ -39,74 +53,63 @@ def run_pipeline(video_source: str, status_updater=None):
             status_updater(progress=progress, stage=stage, message=message, eta_seconds=eta)
 
     logger.info("========== Starting Pipeline ==========")
+    logger.info(f"Source: {source_lang} → Target: {target_lang}")
+    
     try:
-        initialize_project_environment()
-
-        # Check if input is URL or local file
         is_url = video_source.startswith('http://') or video_source.startswith('https://')
         
-        # Stage 1 – Download or Load
         if is_url:
             update(2, "Downloading", "Downloading video from YouTube...")
             video_path = download_youtube_video(video_source)
         else:
             update(2, "Loading", f"Loading local video...")
-            video_path = video_source
+            video_path = os.path.abspath(video_source)
             if not os.path.exists(video_path):
                 raise FileNotFoundError(f"Video file not found: {video_path}")
-            update(10, "Loading", "Video loaded successfully.")
 
+        update(10, "Extracting Audio", "Extracting audio track...")
+        audio_path = extract_audio(video_path)
         video_duration = get_video_duration(video_path)
 
-        # Stage 2 – Audio extraction (10 → 15%)
-        update(12, "Extracting Audio", "Extracting audio track from video...")
-        audio_path = extract_audio(video_path)
-        update(15, "Extracting Audio", "Audio extraction complete.")
+        update(17, "Transcribing", "Transcribing audio with Whisper...")
+        transcript_path = transcribe_audio(audio_path, model_name=whisper_model, language=source_lang)
 
-        # Stage 3 – Transcription (15 → 30%)
-        update(17, "Transcribing", "Loading Whisper model and transcribing audio...")
-        english_segments = transcribe_audio(audio_path)
-        update(30, "Transcribing", f"Transcription complete. {len(english_segments)} segments found.")
-
-        # Stage 4 – Translation (30 → 50%)
-        update(31, "Translating", "Translating segments to Hindi...")
-        total_segs = len(english_segments)
-
+        update(31, "Translating", f"Translating {source_lang} → {target_lang}...")
         def translation_progress(fraction, msg):
-            pct = 30 + fraction * 20  # maps 0-1 → 30-50%
+            pct = 30 + fraction * 20
             update(round(pct, 1), "Translating", msg)
+        
+        translated_path = translate_file(transcript_path, source_lang=source_lang, target_lang=target_lang)
 
-        hindi_segments = translate_segments(english_segments, progress_callback=translation_progress)
-        update(50, "Translating", "Translation complete.")
-
-        # Stage 5 – TTS (50 → 90%)
-        update(51, "Generating Hindi Audio", "Initialising TTS model...")
-
-        def tts_progress(fraction, msg):
-            pct = 50 + fraction * 40  # maps 0-1 → 50-90%
-            update(round(pct, 1), "Generating Hindi Audio", msg)
-
-        dubbed_audio_path, timing_map_path = generate_dubbed_audio(
-            hindi_segments, audio_path, video_duration, progress_callback=tts_progress
+        update(51, "Generating TTS", "Synthesizing speech...")
+        dubbed_audio_path, timing_path = generate_tts(
+            translated_path, audio_path, target_lang=target_lang, speed=TTS_SPEED
         )
-        update(90, "Generating Hindi Audio", "TTS generation complete.")
 
-        # Stage 6 – Final assembly (90 → 100%)
-        update(92, "Assembling Video", "Merging Hindi audio with original video...")
-        final_video_path = run_lipsync(video_path, dubbed_audio_path, timing_map_path)
-        update(100, "Done", "Pipeline finished successfully!")
+        update(92, "Merging", "Combining video and audio...")
+        final_video_path = merge_video_audio(video_path, dubbed_audio_path, video_speed=VIDEO_SPEED)
 
-        logger.info("========== Pipeline Successfully Finished ==========")
-        logger.info(f"Final output: {final_video_path}")
+        update(100, "Done", "Pipeline finished!")
+        logger.info("========== Pipeline Complete ==========")
+        logger.info(f"Output: {final_video_path}")
+        
         return final_video_path
 
     except Exception as e:
-        logger.critical(f"Pipeline failed at a critical stage. Error: {e}")
-        raise e
+        from src.core.logger import logger
+        logger.critical(f"Pipeline failed: {e}")
+        raise
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Automated YouTube Video Dubbing Pipeline")
-    parser.add_argument("url", type=str, help="YouTube video URL to be processed")
+    parser = argparse.ArgumentParser(description="AI Video Dubbing Pipeline")
+    parser.add_argument("source", help="YouTube URL or local video file path")
+    parser.add_argument("-s", "--source-lang", default="en", help="Source language (default: en)")
+    parser.add_argument("-t", "--target-lang", default="hi", help="Target language (default: hi)")
+    parser.add_argument("-m", "--model", default="tiny", 
+                        choices=["tiny", "base", "small", "medium", "large"],
+                        help="Whisper model size (default: tiny)")
     args = parser.parse_args()
-    run_pipeline(args.url)
-
+    
+    run_pipeline(args.source, source_lang=args.source_lang, 
+                target_lang=args.target_lang, whisper_model=args.model)

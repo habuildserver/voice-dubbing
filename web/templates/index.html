@@ -42,6 +42,12 @@
                 <button id="dub-btn">Dub Video</button>
             </div>
 
+            <!-- Scroll Controls -->
+            <div class="scroll-controls">
+                <button id="scroll-up" class="scroll-btn" title="Scroll Up">▲</button>
+                <button id="scroll-down" class="scroll-btn" title="Scroll Down">▼</button>
+            </div>
+
             <!-- Progress Section -->
             <div id="status-container" class="hidden">
                 <div class="stage-label">
@@ -60,7 +66,10 @@
             <div id="result-container" class="hidden">
                 <div class="success-badge">✅ Dubbing Complete!</div>
                 <video id="result-video" controls width="100%"></video>
-                <a id="download-btn" href="#" download class="secondary-btn">⬇ Download Video</a>
+                <div class="download-buttons">
+                    <a id="download-btn" href="#" download class="secondary-btn">⬇ Download Video</a>
+                    <a id="download-audio-btn" href="#" download class="secondary-btn">🎵 Download Audio</a>
+                </div>
             </div>
 
             <!-- Error Section -->
@@ -86,10 +95,13 @@
         const resultContainer = document.getElementById('result-container');
         const resultVideo = document.getElementById('result-video');
         const downloadBtn = document.getElementById('download-btn');
+        const downloadAudioBtn = document.getElementById('download-audio-btn');
         const errorContainer = document.getElementById('error-container');
         const errorText = document.getElementById('error-text');
         const stopBtn = document.getElementById('stop-btn');
         const tabBtns = document.querySelectorAll('.tab-btn');
+        const scrollUpBtn = document.getElementById('scroll-up');
+        const scrollDownBtn = document.getElementById('scroll-down');
 
         let pollingInterval = null;
         let selectedFile = null;
@@ -234,6 +246,10 @@
             resultVideo.src = videoUrl;
             downloadBtn.href = videoUrl;
             downloadBtn.download = filename;
+            
+            const audioUrl = `/outputs/hindi.mp3?t=${Date.now()}`;
+            downloadAudioBtn.href = audioUrl;
+            downloadAudioBtn.download = 'hindi.mp3';
         }
 
         function showError(msg) {
@@ -249,6 +265,15 @@
             errorText.textContent = "Task was cancelled.";
             dubBtn.disabled = false;
         }
+
+        // Scroll controls
+        scrollUpBtn.addEventListener('click', () => {
+            window.scrollBy({ top: -200, behavior: 'smooth' });
+        });
+
+        scrollDownBtn.addEventListener('click', () => {
+            window.scrollBy({ top: 200, behavior: 'smooth' });
+        });
     </script>
 </body>
 </html>
